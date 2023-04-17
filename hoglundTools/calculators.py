@@ -9,7 +9,7 @@ import numpy as np
 def bragg_reflection(hkl, lattice, units_out='A', printout=True):
     if isinstance(hkl, int):
         N = hkl
-    elif isinstance(hkl, list) and lne(hkl)==3:
+    elif isinstance(hkl, list) and len(hkl)==3:
         N = hkl[0]**2 + hkl[1]**2 + hkl[2]**2
     else:
         raise Exception('hkl should be an integer N or a list with length three.')
