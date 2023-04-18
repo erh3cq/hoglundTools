@@ -28,5 +28,5 @@ def estimate_FWHM_center(s):
     _, left, right = estimate_FWHM(s, return_sides=True)
     return (left+right)/2
 
-def skew(s):
+def estimate_skew(s):
     return estimate_FWHM_center(s) - s.valuemax(-1).as_signal1D(0)

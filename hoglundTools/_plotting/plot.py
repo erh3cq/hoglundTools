@@ -10,19 +10,19 @@ from matplotlib.colors import LogNorm
 import numpy as np
 
 from hoglundTools._hyperspy import is_HyperSpy_signal
-from hoglundTools._signal import nn_correction
+from hoglundTools._signal import nv_correction
 
-def abc(axs, pos=[-.2, 1], end=')', title=False, **kwargs):
+def pannel_title(axs, pos=[-.2, 1], end='', title=False, **kwargs):
     '''
-    Adds an alphabetical label to the figures.
+    Adds an alphabetical label to the figure pannels.
     '''
-    if title and 'loc' not in kwargs.keys():
-        kwargs['loc'] = 'left'
     alpha = 'abcdefghijklmnopqrstuvwxyz'
-    axs = axs.flatten()
-    for i, ax in enumerate(axs):
+
+    for i, ax in enumerate(axs.flatten()):
         label = alpha[i]+end
         if title:
+            if 'loc' not in kwargs.keys():
+                kwargs['loc'] = 'left'
             ax.set_title(label, **kwargs)
         else:
             ax.text(pos[0], pos[1], label, transform=ax.transAxes,
@@ -55,7 +55,7 @@ def legend_2axis(axes, labels='auto', display_axis=0, **kwargs):
         axes[0].legend(lines,  labels, **kwargs)
 
 
-def plot_image(data, ax=None, norm=None, nn_correction=None, nn_correction_kwargs={}, **kwargs):
+def plot_image(data, ax=None, norm=None, fix_nv=None, fix_nv_kwargs={}, **kwargs):
     """
     A shortcut plotting function for imshow that automatically handles things like imshow kwargs and intenisty bounds.
     
@@ -68,9 +68,9 @@ def plot_image(data, ax=None, norm=None, nn_correction=None, nn_correction_kwarg
         Axis to plot to. If None then an axis is both created and returned.
     norm: matplotlib normalization
         Normalization to be used. Default is None.
-    nn_correction: boolean
+    fix_nv: boolean
         Correct for negative vlaues.
-    nn_correction_kwargs: dict
+    fig_nv_kwargs: dict
         kwargs for nn_correction.
 
     **kwarg:
@@ -88,8 +88,8 @@ def plot_image(data, ax=None, norm=None, nn_correction=None, nn_correction_kwarg
         else:
             kwargs['extent'] = [axX.min(), axX.max(), axY.max(), axY.min()]
 
-    if nn_correction is not None:
-        data = nn_correction(data, **nn_correction_kwargs)
+    if fix_nv is not None:
+        data = nv_correction(data, **fix_nv_kwargs)
         
     img = ax.imshow(data, **kwargs)
 
