@@ -53,7 +53,7 @@ def estimate_FWPM(data, percent=0.5, E=None, return_sides=False, verbose=None):
         print('Peak maximum: {}'.format(E_max_v))
     #pos_extremum = s.valuemax(-1).data.mean() #TODO: use pos_extremum = s.valuemax(-1) for nearest above and below
 
-    s = np.abs(data-I_p)
+    s = np.abs(data-I_p[...,None])
     
     if hs_sig:
         r = s.isig[E_max_v:].valuemin(-1).as_signal1D(0) #TODO: add capabilits for image
