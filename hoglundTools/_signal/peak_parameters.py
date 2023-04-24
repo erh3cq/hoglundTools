@@ -8,66 +8,166 @@ import numpy as np
 
 from hoglundTools._hyperspy import is_HyperSpy_signal
 
-
-def estimate_FWPM(data, percent=0.5, E=None, return_sides=False, verbose=None):
+def _estimate_FWPM(data, E, percent=0.5, verbose=None):
     '''
     Estimate the full width of a peak at a percent of its height.
 
     Parameters
     ----------
-    data: float
+    data: numpy-array
         Data containing a peak.
     percent: float
         Fractional height of the peak where the width will be measured.
     E: numpy-like, None
         Energy-axis array.
-        If data is a HyperSpy signal and E is None then E will be infered from the signal.
-        If None then the falues will be returned in relative pixel values.
-    return_sides: boolean
-        Return the bounds of the peak at the fractional intensity.
     verbose: None, str
         info - print information about the peak.
-    
     '''
-    hs_sig = is_HyperSpy_signal(data)
-
-    I_min = np.nanmin(data, axis=-1)
-    I_max = np.nanmax(data, axis=-1)
-    I_diff = I_max - I_min
-    I_p = I_diff * percent
-    if verbose in ['info']:
-        print('I_min:  {:.2f}'.format(I_min))
-        print('I_max:  {:.2f}'.format(I_max))
-        print('I_diff: {:.2f}'.format(I_diff))
     
-    if E is None and hs_sig:
-        E = data.axes_manager[-1].axis
-    elif E is None:
-        E = np.arange(data.shape([-1]))
-    # if E is None:
-    #     raise ValueError('E was not set and data is not a HyperSpy signal.')
-
-    E_max_i = np.nanargmax(E)
+    E_max_i = np.nanargmax(data, axis=-1)
     E_max_v = E[E_max_i]
-    if verbose in ['info']:
-        print('Peak maximum: {}'.format(E_max_v))
-    #pos_extremum = s.valuemax(-1).data.mean() #TODO: use pos_extremum = s.valuemax(-1) for nearest above and below
+    if verbose in ['info', 'all']: print(f'E_max: {E_max_v:.2f}')
 
-    s = np.abs(data-I_p[...,None])
-    
-    if hs_sig:
-        r = s.isig[E_max_v:].valuemin(-1).as_signal1D(0) #TODO: add capabilits for image
-        l = s.isig[:E_max_v].valuemin(-1).as_signal1D(0) #TODO: add capabilits for image
+    I_max = np.nanmax(data, axis=-1)
+    I_p = I_max * percent
+    if verbose in ['info', 'all']: print(f'I_max: {I_max:.2f}')
 
+    data = np.abs(data-I_p[...,None])
+
+    l = np.nanargmin(data[:E_max_i])
+    l = E[:E_max_i][l]
+    r = np.nanargmin(data[E_max_i:])
+    r = E[E_max_i:][r]
+
+    return r-l
     
-    if return_sides:
-        return r-l, l ,r
+def _estimate_LSPM(data, E, percent=0.5, E_max_i=None, verbose=None):
+    '''
+    Estimate the full width of a peak at a percent of its height.
+
+    Parameters
+    ----------
+    data: array-like
+        Data containing a peak.
+    percent: float
+        Fractional height of the peak where the width will be measured.
+    E: numpy-like, None
+        Energy-axis array.
+'''
+    
+    # if E_max_i is None:
+    #     raise AttributeError('Neither E nor E_max_i where set.')
+    
+
+    l = np.nanargmin(data[:E_max_i])
+    l = E[:E_max_i][l]
+
+def estimate_FWPM(data, percent=0.5, E=None, verbose=None, hs_kwargs={'inplace':False}):
+    '''
+    Estimate the full width of a peak at a percent of its height.
+
+    Parameters
+    ----------
+    data: array-like
+        Data containing a peak.
+    percent: float
+        Fractional height of the peak where the width will be measured.
+    E: numpy-like, None
+        Energy-axis array.
+        If None then the values will be returned in relative pixel values.
+        If data is a HyperSpy signal and E is None then E will be infered from the signal.
+    verbose: None, str
+        info - print information about the peak.
+
+    hs_kwargs
+        Key words to pass to map if data is a HyperSpy signal. 
+    '''
+
+    if is_HyperSpy_signal(data):
+        if verbose in ['all']: print('Running as HS sig')
+        fwpm = data.map(_estimate_FWPM, E=data.axes_manager[-1].axis, percent=percent, verbose=verbose, **hs_kwargs)
     else:
-        return r-l
+        if E is None:
+            if verbose in ['all']: print('E is None. The returned values will be in relative indicies.')
+            E = np.arange(data.shape[-1])
 
-def estimate_FWHM_center(data):
-    _, l, r = estimate_FWPM(data, percent=0.5, return_sides=True)
+        shape = np.shape(data)
+        data = data.reshape(-1, shape[-1])
+        fwpm = np.asarray([_estimate_FWPM(d, E=E, percent=percent, verbose=verbose) for d in data], dtype=float).reshape(shape[:2])
+        
+    return fwpm
+    
+def _estimate_FWPM_center(data, E, percent=0.5, verbose=None):
+    '''
+    Estimate the peak center at a percent of its height.
+
+    Parameters
+    ----------
+    data: numpy-array
+        Data containing a peak.
+    percent: float
+        Fractional height of the peak where the width will be measured.
+    E: numpy-like, None
+        Energy-axis array.
+    verbose: None, str
+        info - print information about the peak.
+    '''
+    
+    E_max_i = np.nanargmax(data, axis=-1)
+    E_max_v = E[E_max_i]
+    if verbose in ['info', 'all']: print(f'E_max: {E_max_v:.2f}')
+
+    I_max = np.nanmax(data, axis=-1)
+    I_p = I_max * percent
+    if verbose in ['info', 'all']: print(f'I_max: {I_max:.2f}')
+
+    data = np.abs(data-I_p[...,None])
+
+    l = np.nanargmin(data[:E_max_i])
+    l = E[:E_max_i][l]
+    r = np.nanargmin(data[E_max_i:])
+    r = E[E_max_i:][r]
+
     return (l+r)/2
 
-def estimate_skew(s):
-    return estimate_FWHM_center(s) - s.valuemax(-1).as_signal1D(0)
+# def estimate_FWPM_center(data):
+#     _, l, r = estimate_FWPM(data, percent=0.5, return_sides=True)
+#     return (l+r)/2
+
+def estimate_FWPM_center(data, percent=0.5, E=None, verbose=None, hs_kwargs={'inplace':False}):
+    '''
+    Estimate the peak center at a percent of its height.
+
+    Parameters
+    ----------
+    data: array-like
+        Data containing a peak.
+    percent: float
+        Fractional height of the peak where the width will be measured.
+    E: numpy-like, None
+        Energy-axis array.
+        If None then the values will be returned in relative pixel values.
+        If data is a HyperSpy signal and E is None then E will be infered from the signal.
+    verbose: None, str
+        info - print information about the peak.
+
+    hs_kwargs
+        Key words to pass to map if data is a HyperSpy signal. 
+    '''
+
+    if is_HyperSpy_signal(data):
+        if verbose in ['all']: print('Running as HS sig')
+        fwpm = data.map(_estimate_FWPM_center, E=data.axes_manager[-1].axis, percent=percent, verbose=verbose, **hs_kwargs)
+    else:
+        if E is None:
+            if verbose in ['all']: print('E is None. The returned values will be in relative indicies.')
+            E = np.arange(data.shape[-1])
+
+        shape = np.shape(data)
+        data = data.reshape(-1, shape[-1])
+        fwpm = np.asarray([_estimate_FWPM_center(d, E=E, percent=percent, verbose=verbose) for d in data], dtype=float).reshape(shape[:2])
+        
+    return fwpm
+
+def estimate_skew(data):
+    return estimate_FWPM_center(data) - data.valuemax(-1).as_signal1D(0)
