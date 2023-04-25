@@ -12,6 +12,49 @@ import numpy as np
 from hoglundTools._hyperspy import is_HyperSpy_signal
 from hoglundTools._signal import nv_correction
 
+def scale_bar(ax, size, label, color='white', kw_scale={}, kw_font={}):
+    '''Add an axes bar
+    Properties
+    ----------
+    ax: matplotli.axis
+        Axis to add scale bar to.
+    size: flaot
+        Size of the scale bar in data cordinates.
+    label: str
+        Label to display above scale bar.
+    kw_scale: dict
+        Dictionary of kwargs to supply to AnchoredSizeBar.
+    kw_font: dict
+        Dictionary of kwargs to supply to FontProperties.
+    '''
+    from mpl_toolkits.axes_grid1.anchored_artists import AnchoredSizeBar
+    import matplotlib.font_manager as fm
+    fontprops = {'size':12}
+    for k,i in kw_font.items():
+        fontprops[k] = i
+    scaleprops = {'pad':0.1,
+            'color':color,
+            'frameon':False,
+            'label_top':True,
+            'size_vertical':2}
+    for k,i in kw_scale.items():
+        scaleprops[k] = i
+    
+    fontprops = fm.FontProperties(*fontprops)
+    scalebar = AnchoredSizeBar(
+            ax.transData,
+            size, label, 3,
+            pad=0.1,
+            color=color,
+            frameon=False,
+            label_top=True,
+            size_vertical=0.1,
+            fontproperties=fontprops)
+    #scalebar0.size_bar.get_children()[0].fill = True
+    ax.add_artist(scalebar)
+
+    return scalebar
+
 def pannel_title(axs, pos=[-.2, 1], end='', title=False, **kwargs):
     '''
     Adds an alphabetical label to the figure pannels.
