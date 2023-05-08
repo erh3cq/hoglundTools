@@ -113,7 +113,6 @@ def load_swift_to_hs(file, signal_type='image', **kwargs):
 
     if 'lazy' in kwargs:
         sig = sig.as_lazy()
-
         
     return sig
 
