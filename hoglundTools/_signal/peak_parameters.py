@@ -43,7 +43,7 @@ def _estimate_FWPM(data, E, percent=0.5, verbose=None):
     
 def _estimate_LSPM(data, E, percent=0.5, E_max_i=None, verbose=None):
     '''
-    Estimate the full width of a peak at a percent of its height.
+    Estimate the left side of a peak at a percent of its height.
 
     Parameters
     ----------

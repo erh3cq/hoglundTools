@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import numpy as np
+from scipy.signal import correlate, correlation_lags
 from hoglundTools._hyperspy import is_HyperSpy_signal
 
 

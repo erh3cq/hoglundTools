@@ -196,7 +196,6 @@ class   plot_image(object):
         
         self.ax = ax if ax is not None else plt.gca()
         self._hs_sig = is_HyperSpy_signal(data, signal_type='Signal2D')
-        print(self._hs_sig)
         self.norm = norm
         self.ticks_and_labels = ticks_and_labels
 
