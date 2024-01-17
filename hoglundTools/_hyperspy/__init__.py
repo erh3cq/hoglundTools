@@ -251,26 +251,32 @@ def get_wq_rigid_shifts(signal: Signal2D, cumlative:bool=True, calibrated_units:
     signal.fold()
     return shifts
 
-def shift_Signal2D_along_axis(signal:object, shift_array:NDArray, axis:str|int='E', inplace:bool=True, kwargs_shit1D:dict={}) -> Signal2D:
-    """shift_Signal2D_along_axis _summary_
+def shift_Signal2D_along_axis(signal:object, shift_array:NDArray, axis:str|int='E',
+                               inplace:bool=True, subpixel:bool=True,
+                               kwargs_shit1D:dict={}) -> Signal2D:
+    """Rigidly shift a 2D signal along a single axis.
 
     Parameters
     ----------
     signal : object
-        _description_
+        Hyperspy 2D signal to align.
     shift_array : NDArray
-        _description_
+        Array containing the shift pixels.
     axis : str | int, optional
-        _description_, by default 'E'
+        Axis to shift along, by default 'E'
     inplace : bool, optional
-        _description_, by default True
+        Perform the operation and store in the supplied signal, by default True
+    subpixel : bool,optional
+        Currently not implemented.
+        If true, the `shift1D` opperation is used to shift and will interpolate where necesary.
+        If false, ... TODO: shift by the pixel amount and do not interpolate.
     kwargs_shit1D : dict, optional
-        _description_, by default {}
+        kwargs for the hyperspy shift1D function, by default {}
 
     Returns
     -------
     Signal2D
-        _description_
+        Aligned signal if inplace is True.
     """    
     if not inplace:
         signal = signal.deepcopy()
@@ -283,8 +289,9 @@ def shift_Signal2D_along_axis(signal:object, shift_array:NDArray, axis:str|int='
     shift_array = np.stack([shift_array]*signal.axes_manager[other_sig_axis].size, axis=-1)
     
     signal = signal.as_signal1D(axis)
-    
-    signal.shift1D(shift_array=-shift_array, **kwargs_shit1D)
+    if subpixel:
+        signal.shift1D(shift_array=-shift_array, **kwargs_shit1D)
+
     signal = signal.as_signal2D(og_sig_axes)
     if not inplace:
         return signal
