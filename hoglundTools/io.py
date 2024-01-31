@@ -22,7 +22,8 @@ class swift_json_reader:
         self.signal_type = signal_type if signal_type is not None else self.read_signal_type()
 
         #Axis handling
-        self.is_series = x if self.meta.get('is_sequence') is not None else False
+        self.is_series = True if self.meta.get('is_sequence') is not None else False
+        self.is_scan = True if self.meta['metadata'].get('scan') is not None else False
         self.nav_dim = self.meta['collection_dimension_count']
         self.sig_dim = self.meta['datum_dimension_count']
         self.data_shape = np.load(file+'.npy', mmap_mode='r').shape
@@ -35,10 +36,10 @@ class swift_json_reader:
 
         #Instrument metadata
         self.beam_energy = self.meta['metadata']['instrument'].get('high_tension')/1E3
-        self.scan_rotation = self.meta['metadata']['scan'].get('rotation_deg')
-        self.dwell_time = self.meta['metadata']['scan']['scan_device_parameters'].get('pixel_time_us') * 1E-6
         self.exposure = self.meta['metadata']['hardware_source'].get('exposure')
-        
+        if self.is_scan:
+            self.scan_rotation = self.meta['metadata']['scan'].get('rotation_deg')
+            self.dwell_time = self.meta['metadata']['scan']['scan_device_parameters'].get('pixel_time_us') * 1E-6
         self.aberrations = self.read_abberations()
 
     def read_signal_type(self):
@@ -68,10 +69,12 @@ class swift_json_reader:
             self.axes_qspace_dims = [-2, -1]
             for i in self.axes_qspace_dims:
                 self.axes[i]['scale'] = 1
-                self.axes[i]['offset'] = data.shape[i]/2
+                self.axes[i]['offset'] = self.data_shape[i]/2
                 self.axes[i]['units'] = 'px'
 
     def read_abberations(self):
+        if self.meta['metadata']['instrument'].get('ImageScanned') is None:
+            return None
         aber = {k:v for k,v in self.meta['metadata']['instrument']['ImageScanned'].items() if k[0]=='C' and k[1:3].isdigit()}
         mags = {}
         angs = {}
@@ -109,15 +112,19 @@ def swift_meta_to_hs_dict(swift_metadata:object, signal_type:str=None) -> dict:
     meta_dict['Signal'] = dict(signal_type=swift_metadata.signal_type)
     meta_dict['Acquisition_instrument'] = {'TEM':{
         'beam_energy': swift_metadata.beam_energy,
-        'scan_rotation': swift_metadata.scan_rotation,
-        'Detector':{
-            'EELS':{
-                'dwell_time': swift_metadata.dwell_time,
+        'Aberrations': swift_metadata.aberrations,
+        'Detector':{}
+        }
+    }
+
+    if swift_metadata.is_scan:
+        meta_dict['Acquisition_instrument']['TEM']['scan_rotation'] = swift_metadata.scan_rotation
+        meta_dict['Acquisition_instrument']['TEM']['dwell_time'] = swift_metadata.dwell_time
+        if swift_metadata.signal_type == 'EELS' or swift_metadata.signal_type == 'difraction':
+            meta_dict['Acquisition_instrument']['TEM']['Detector']['EELS'] = {
                 'exposure':  swift_metadata.exposure
             }
-        },
-        'Aberrations': swift_metadata.aberrations
-    }}
+
     return meta_dict
 
 def load_swift_to_hs(file:str, signal_type:str=None, lazy:bool=False, **kwargs) -> object:
@@ -194,23 +201,25 @@ def convert_swift_to_py4DSTEM(file:str, lazy:bool=False, **kwargs) -> object:
     data = np.load(file+'.npy', mmap_mode=mmap)
     if meta.is_series:
         raise('Reading of series are not currently implimented. The data must be a four-dimenstional 4D-STEM scan.')
-
+    print(f'Creating {file}.hdf5', end='...')
     f = h5py.File(file+".hdf5", "w")
-    ds = f.create_group("Experiments").create_group(meta.title)
-    dc = ds.create_dataset("datacube", data=data)
+    ds = f.create_group("Experiments").create_group("datacube")
+    ds.create_dataset("data", data=data)
     
     
-    axis_names = ['Rx', 'Ry', 'Qx', 'Qy']
+    axis_names = {'x':'Rx', 'y':'Ry', 'qx':'Qx', 'qy':'Qy'}
     for i,ax in enumerate(meta.axes):
-        dim = dc.create_dataset(f"dim{i}", data=np.arange(ax['size']))
-        dim.attrs['name'] = axis_names[i]
+        dim = ds.create_dataset(f"dim{i}", data=np.arange(ax['size']))
+        dim.attrs['name'] = axis_names[ax['name']]
         dim.attrs['units'] = ax['units']
     cal = ds.create_group("calibration")
-    cal.create_dataset('R_pixel_size', data=meta.axes[0]['scale'])
-    cal.create_dataset('R_pixel_units', data=meta.axes[0]['units'])
+    if meta.axes[0]['name'] in 'xyz':
+        cal.create_dataset('R_pixel_size', data=meta.axes[0]['scale'])
+        cal.create_dataset('R_pixel_units', data=meta.axes[0]['units'])
     cal.create_dataset('Q_pixel_size', data=meta.axes[-1]['scale'])
     cal.create_dataset('Q_pixel_units', data=meta.axes[-1]['units'])
     cal.create_dataset('qx0_mean', data=-meta.axes[-2]['offset'])
-    cal.create_dataset('R_pixel_units', data=-meta.axes[-1]['offset'])
-
+    cal.create_dataset('qy0_mean', data=-meta.axes[-1]['offset'])
+    
+    print('Created.')
     f.close()
