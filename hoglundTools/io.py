@@ -3,20 +3,33 @@
 import json
 import sys
 import os
+from glob import glob
+
 import numpy as np
+from numpy.typing import NDArray
 import dask.array as da
+
 import h5py
 import json
-from numpy.typing import NDArray
 from tqdm import tqdm
 
 class swift_json_reader:
     
-    def __init__(self, file:str, signal_type:str=None, get_npy_shape:bool=True, **kwargs):
+    def __init__(self, file_path:str, file_type=None, signal_type:str=None, get_npy_shape:bool=True, **kwargs):
         #File handling
-        self.file = file
-        self.filename = os.path.split(file)[-1]
-        with open(file+'.json') as f: self.meta = json.load(f)
+        self.file_path = file_path
+        self.file_directory, self.file_name = os.path.split(file_path)[-1]
+        self.file_extension = os.path.split(self.file_name)[-1]
+        if self.file_extension=='' and file_type is None:
+            self.file_extension = os.path.split(glob(file+'.n*')[0])[-1]
+        
+        if self.file_extension == '.npy':
+            with open(file_path+'.json') as f: self.meta = json.load(f)
+            self.data_shape = np.load(file_path+'.npy', mmap_mode='r').shape
+        elif self.file_extension == '.ndata1':
+            file = np.load(file_path, mmap_mode='r')
+            self.meta = json.loads(file['metadata.json'].decode())
+            self.data_shape = file['data'].shape
 
         #General metadata
         self.title = self.meta.get('title')
@@ -27,7 +40,6 @@ class swift_json_reader:
         self.is_scan = True if self.meta['metadata'].get('scan') is not None else False
         self.nav_dim = self.meta['collection_dimension_count']
         self.sig_dim = self.meta['datum_dimension_count']
-        self.data_shape = np.load(file+'.npy', mmap_mode='r').shape
 
         self.axes = self.read_axes_calibrations()
         if get_npy_shape:
