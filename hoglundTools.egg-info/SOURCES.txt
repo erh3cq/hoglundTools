@@ -2,6 +2,7 @@ README.md
 setup.py
 hoglundTools/__init__.py
 hoglundTools/calculators.py
+hoglundTools/io.py
 hoglundTools/plot.py
 hoglundTools/signal.py
 hoglundTools.egg-info/PKG-INFO

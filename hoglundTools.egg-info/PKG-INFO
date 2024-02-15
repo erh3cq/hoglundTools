@@ -4,3 +4,6 @@ Version: 1.0
 Summary: Useful functions for python. Mostly personal use.
 Author: Eric Hoglund
 Author-email: hoglunder@ornl.gov
+Requires-Dist: numpy
+Requires-Dist: matplotlib
+Requires-Dist: hyperspy>=2.0
