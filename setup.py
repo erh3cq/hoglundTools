@@ -8,5 +8,5 @@ setup(name='hoglundTools',
       author='Eric Hoglund',
       author_email='hoglunder@ornl.gov',
       packages=['hoglundTools'],
-      install_requires=['numpy', 'matplotlib','hyperspy>"2.0"']
+      install_requires=['numpy', 'matplotlib','hyperspy>=2.0']
      )
