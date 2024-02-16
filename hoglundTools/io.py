@@ -11,25 +11,67 @@ import dask.array as da
 
 import h5py
 import json
-from tqdm import tqdm
+#from tqdm import tqdm
+import zipfile
+
+
+
+def load_memmap_from_npz(path, name):
+    '''
+    Can't load npy files from npz files as memap.
+    Temporary work around from https://github.com/numpy/numpy/issues/5976.
+    '''
+    zf = zipfile.ZipFile(path)
+    info = zf.NameToInfo[name + '.npy']
+    assert info.compress_type == 0
+    offset = zf.open(name + '.npy')._orig_compress_start
+
+    fp = open(path, 'rb')
+    fp.seek(offset)
+    version = np.lib.format.read_magic(fp)
+    assert version in [(1,0), (2,0)]
+    if version == (1,0):
+        shape, fortran_order, dtype = np.lib.format.read_array_header_1_0(fp)
+    elif version == (2,0):
+        shape, fortran_order, dtype = np.lib.format.read_array_header_2_0(fp)
+    data_offset = fp.tell() # file position will be left at beginning of data
+    return np.memmap(path, dtype=dtype, shape=shape,
+                     order='F' if fortran_order else 'C', mode='r',
+                     offset=data_offset)
+
+def parse_file_path(file_path:str):
+    directory, name = os.path.split(file_path)
+    name, extension = os.path.splitext(name)
+    if extension=='':
+        extension = os.path.splitext(glob(file_path+'.n*')[0])[-1]
+    return directory, name, extension
+
+def collect_swift_file(file_path:str):
+    _, _, file_extension = parse_file_path(file_path)
+    file_path = os.path.splitext(file_path)[0]
+
+    if file_extension == '.npy':
+        with open(file_path+'.json') as f: meta = json.load(f)
+        data = np.load(file_path+'.npy', mmap_mode='r')
+    elif file_extension == '.ndata1':
+        file = np.load(file_path+'.ndata1', mmap_mode='r')
+        meta = json.loads(file['metadata.json'].decode())
+        data = load_memmap_from_npz(file_path+'.ndata1', 'data')
+    else:
+        raise Exception(f'The Swift files could not be collected.\nA file extension should with `.npy` or `.ndata1` were not found or provided.\n{file_path}')
+    
+    return meta, data
+
+
 
 class swift_json_reader:
     
-    def __init__(self, file_path:str, file_type=None, signal_type:str=None, get_npy_shape:bool=True, **kwargs):
+    def __init__(self, file_path:str, signal_type:str=None, get_npy_shape:bool=True, **kwargs):
         #File handling
         self.file_path = file_path
-        self.file_directory, self.file_name = os.path.split(file_path)[-1]
-        self.file_extension = os.path.split(self.file_name)[-1]
-        if self.file_extension=='' and file_type is None:
-            self.file_extension = os.path.split(glob(file+'.n*')[0])[-1]
-        
-        if self.file_extension == '.npy':
-            with open(file_path+'.json') as f: self.meta = json.load(f)
-            self.data_shape = np.load(file_path+'.npy', mmap_mode='r').shape
-        elif self.file_extension == '.ndata1':
-            file = np.load(file_path, mmap_mode='r')
-            self.meta = json.loads(file['metadata.json'].decode())
-            self.data_shape = file['data'].shape
+        self.file_directory, self.file_name, self.file_extension = parse_file_path(file_path)
+        self.meta, data = collect_swift_file(self.file_path)
+        self.data_shape = data.shape
 
         #General metadata
         self.title = self.meta.get('title')
@@ -154,12 +196,12 @@ def swift_meta_to_hs_dict(swift_metadata:object, signal_type:str=None) -> dict:
 
     return meta_dict
 
-def load_swift_to_hs(file:str, signal_type:str=None, lazy:bool=False, **kwargs) -> object:
+def load_swift_to_hs(file_path:str, signal_type:str=None, lazy:bool=False, **kwargs) -> object:
     """load_swift_to_hs _summary_
 
     Parameters
     ----------
-    file : str
+    file_path : str
         Filename for the npy json pair to be read into hyperspy.
     signal_type : str, optional
         Type of hyperspy signal. Some signals require specific metadata trees.
@@ -175,15 +217,16 @@ def load_swift_to_hs(file:str, signal_type:str=None, lazy:bool=False, **kwargs) 
     """
     from hyperspy.signals import BaseSignal, Signal1D, Signal2D
 
-    meta = swift_json_reader(file, signal_type=signal_type)
+    meta = swift_json_reader(file_path, signal_type=signal_type)
+    _, data = collect_swift_file(file_path)
 
     #mmap = 'c' if kwargs.get('lazy') else None
-    #data = np.load(file+'.npy', mmap_mode=mmap)
+    #data = np.load(file_path+'.npy', mmap_mode=mmap)
     if lazy:
-        #data = da.from_array(np.memmap(file+'.npy', mode='r'))
-        data = da.from_array(np.load(file+'.npy', mmap_mode='c'))
+        #data = da.from_array(np.memmap(file_path+'.npy', mode='r'))
+        data = da.from_array(data)
     else:
-        data = np.load(file+'.npy')
+        data = data.copy()
 
     if meta.sig_dim == 1:
         Signal = Signal1D
@@ -205,13 +248,13 @@ def load_swift_to_hs(file:str, signal_type:str=None, lazy:bool=False, **kwargs) 
     
     return sig
 
-def load_swift_to_hdf5(file:str, signal_type:str=None, lazy:bool=False, **kwargs) -> object:
-    meta = swift_json_reader(file, signal_type=signal_type)
+def load_swift_to_hdf5(file_path:str, signal_type:str=None, lazy:bool=False, **kwargs) -> object:
+    meta = swift_json_reader(file_path, signal_type=signal_type)
     
     mmap = 'c' if kwargs.get('lazy') else None
-    data = np.load(file+'.npy', mmap_mode=mmap)
+    data = np.load(file_path+'.npy', mmap_mode=mmap)
 
-    f = h5py.File(file+".hdf5", "w")
+    f = h5py.File(file_path+".hdf5", "w")
     ds = f.create_group("Experiments").create_group(meta.title)
     ds.create_dataset("data", data=data)
 
@@ -234,59 +277,8 @@ def load_swift_to_hdf5(file:str, signal_type:str=None, lazy:bool=False, **kwargs
     return f
 
 
-# def convert_swift_to_py4DSTEM(file:str, lazy:bool=False, **kwargs) -> object:
-#     meta = swift_json_reader(file, signal_type='diffraction')
-    
-#     mmap = 'c' if kwargs.get('lazy') else None
-#     data = np.load(file+'.npy', mmap_mode=mmap)
-#     if meta.is_series:
-#         raise('Reading of series are not currently implimented. The data must be a four-dimenstional 4D-STEM scan.')
-#     print(f'Creating {file}.hdf5', end='...')
-#     f = h5py.File(file+".hdf5", "w")
-    
-#     ds = f.create_group("Experiments")
-#     ds.attrs['emd_group_type'] = "root"
-#     ds.attrs['version_major'] = "0"
-#     ds.attrs['version_minor'] = "13"
 
-#     ds = ds.create_group("datacube")
-#     ds.attrs['emd_group_type'] = 1
-#     if len(meta.axes) == 2:
-#         ds.attrs['py4dstem_class'] = "DiffractionSlice"
-#     else:
-#         ds.attrs['py4dstem_class'] = "DataCube"
-
-#     dc = ds.create_dataset("data", data=data)
-#     dc.attrs['units'] = "pixel intensity"
-    
-#     axis_names = {'x':'Rx', 'y':'Ry', 'qx':'Qx', 'qy':'Qy'}
-#     for i,ax in enumerate(meta.axes):
-#         dim = ds.create_dataset(f"dim{i}", data=np.arange(ax['size']))
-#         dim.attrs['name'] = axis_names[ax['name']]
-#         dim.attrs['units'] = ax['units']
-    
-#     cal = ds.create_group("calibration")
-#     cal.attrs['emd_group_type'] = 0
-#     cal.attrs['py4dstem_class'] = "Calibration"
-#     if meta.axes[0]['name'] in 'xyz':
-#         cal.create_dataset('R_pixel_size', data=meta.axes[0]['scale'])
-#         cal.create_dataset('R_pixel_units', data=meta.axes[0]['units'])
-#     cal.create_dataset('Q_pixel_size', data=meta.axes[-1]['scale'])
-#     cal.create_dataset('Q_pixel_units', data=meta.axes[-1]['units'])
-#     cal.create_dataset('qx0_mean', data=-meta.axes[-2]['offset'])
-#     cal.create_dataset('qy0_mean', data=-meta.axes[-1]['offset'])
-#     for v in cal.values(): 
-#         if h5py.check_string_dtype(v.dtype):
-#             #v.attrs["type"] = 'string'.encode("latin-1")
-#             v.attrs.create("type", 'string'.encode("latin-1"))
-#         else:
-#             #v.attrs["type"] = "number".encode("latin-1")
-#             v.attrs.create("type", 'number'.encode("latin-1"))
-    
-#     print('Created.')
-#     f.close()
-
-def convert_swift_to_py4DSTEM(file:str, lazy:bool=False, verbose=False, **kwargs) -> object:
+def convert_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **kwargs) -> object:
     def add_dataset_wAttrs(add_to, name:str, data, attributes:dict):
         set = add_to.create_dataset(name, data=data)
         for k,v in attributes.items():
@@ -298,15 +290,15 @@ def convert_swift_to_py4DSTEM(file:str, lazy:bool=False, verbose=False, **kwargs
             grp.attrs.create(k, v)
         return grp
 
-    meta = swift_json_reader(file, signal_type='diffraction')
-    
-    mmap = 'c' if kwargs.get('lazy') else None
-    data = np.load(file+'.npy', mmap_mode=mmap)
+    meta, data = swift_json_reader(file_path, signal_type='diffraction')
+    if not kwargs.get('lazy'): data = data.copy()
+    #mmap = 'c' if kwargs.get('lazy') else None
+    #data = np.load(file_path+'.npy', mmap_mode=mmap)
     if meta.is_series: raise('Reading of series are not currently implimented. The data must be a four-dimenstional 4D-STEM scan.')
     end = '...' if verbose else '\n'
-    print(f'Creating {file}.hdf5', end='...')
+    print(f'Creating {file_path}.hdf5', end='...')
     
-    f = h5py.File(file+".hdf5", "w")
+    f = h5py.File(file_path+".hdf5", "w")
     f.attrs['authoring_program'] = 'hoglundTools'
     f.attrs['authoring_user'] = ""
     f.attrs['emd_group_type'] = "file"
