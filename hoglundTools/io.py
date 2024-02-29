@@ -101,7 +101,8 @@ class swift_json_reader:
         #Detector metadata
         self.exposure = self.meta['metadata']['hardware_source'].get('exposure')
         self.binning = self.meta['properties'].get('binning')
-        self.flip_x = self.meta['properties'].get('is_flipped_horizontally')
+        self.flip_x = self.meta['properties'].get('is_flipped_horizontally') or \
+            self.meta['properties']['camera_processing_parameters'].get('flip_l_r') or False
         
 
     def read_signal_type(self):
@@ -290,7 +291,9 @@ def convert_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **k
             grp.attrs.create(k, v)
         return grp
 
-    meta, data = swift_json_reader(file_path, signal_type='diffraction')
+    meta = swift_json_reader(file_path, signal_type='diffraction')
+    _, data = collect_swift_file(file_path)
+
     if not kwargs.get('lazy'): data = data.copy()
     #mmap = 'c' if kwargs.get('lazy') else None
     #data = np.load(file_path+'.npy', mmap_mode=mmap)
@@ -298,7 +301,7 @@ def convert_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **k
     end = '...' if verbose else '\n'
     print(f'Creating {file_path}.hdf5', end='...')
     
-    f = h5py.File(file_path+".hdf5", "w")
+    f = h5py.File(f"{meta.file_directory}/{meta.file_name}.hdf5", "w")
     f.attrs['authoring_program'] = 'hoglundTools'
     f.attrs['authoring_user'] = ""
     f.attrs['emd_group_type'] = "file"
