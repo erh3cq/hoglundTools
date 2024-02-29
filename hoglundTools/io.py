@@ -138,17 +138,17 @@ class swift_json_reader:
         if self.meta['metadata']['instrument'].get('ImageScanned') is None:
             return None
         aber = {k:v for k,v in self.meta['metadata']['instrument']['ImageScanned'].items() if k[0]=='C' and k[1:3].isdigit()}
-        mags = {}
-        angs = {}
+        aber_c = {}
+        #mags = {}
+        #angs = {}
         for k,v in aber.items():
             ab = k[:3]
-            if k[0]=='C' and k[-1]=='a':
-                c = aber[ab+'.a']+1j*aber[ab+'.b']
-                mags[ab] = np.abs(c)
-                angs['phi'+ab[1:]] = np.angle(c)
-            else:
-                mags[ab] = v
-        return {**mags, **angs}
+            if k[0]=='C' and k[-1]!='b':
+                if k[-1] == 'a':
+                    aber_c[ab] = aber[ab+'.a']+1j*aber[ab+'.b']
+                else:
+                    aber_c[ab] = v
+        return aber_c
 
 def swift_meta_to_hs_dict(swift_metadata:object, signal_type:str=None) -> dict:
     """swift_meta_to_hs_dict _summary_
