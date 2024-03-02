@@ -102,7 +102,7 @@ class swift_json_reader:
         self.exposure = self.meta['metadata']['hardware_source'].get('exposure')
         self.binning = self.meta['properties'].get('binning')
         self.flip_x = self.meta['properties'].get('is_flipped_horizontally') or \
-            self.meta['properties']['camera_processing_parameters'].get('flip_l_r') or False
+            self.meta.get('camera_processing_parameters').get('flip_l_r') if self.meta.get('camera_processing_parameters') is not None else None
         
 
     def read_signal_type(self):
@@ -299,7 +299,7 @@ def convert_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **k
     #data = np.load(file_path+'.npy', mmap_mode=mmap)
     if meta.is_series: raise('Reading of series are not currently implimented. The data must be a four-dimenstional 4D-STEM scan.')
     end = '...' if verbose else '\n'
-    print(f'Creating {file_path}.hdf5', end='...')
+    print(f'{meta.file_directory}/{meta.file_name}.hdf5', end='...')
     
     f = h5py.File(f"{meta.file_directory}/{meta.file_name}.hdf5", "w")
     f.attrs['authoring_program'] = 'hoglundTools'
