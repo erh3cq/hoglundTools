@@ -295,12 +295,11 @@ def convert_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **k
     _, data = collect_swift_file(file_path)
 
     if not kwargs.get('lazy'): data = data.copy()
-    #mmap = 'c' if kwargs.get('lazy') else None
-    #data = np.load(file_path+'.npy', mmap_mode=mmap)
     if meta.is_series: raise('Reading of series are not currently implimented. The data must be a four-dimenstional 4D-STEM scan.')
     end = '...' if verbose else '\n'
     print(f'{meta.file_directory}/{meta.file_name}.hdf5', end='...')
     
+    #Create the file and initiate front matter
     f = h5py.File(f"{meta.file_directory}/{meta.file_name}.hdf5", "w")
     f.attrs['authoring_program'] = 'hoglundTools'
     f.attrs['authoring_user'] = ""
@@ -353,3 +352,87 @@ def convert_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **k
     
     print('Created.')
     f.close()
+
+#TODO: Start changin over to a read function instead of convert
+def load_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **kwargs) -> object:
+    """Read swift ndata1 or npy+json file into the py4DSTEM format.
+
+    Parameters
+    ----------
+    file_path : str
+        File path to the file to be read. If '.ndata' or '.npy' are provided then the files will be searched for explicitly. If the extension is not provided then the reader will try to find the appropriate '.n*' extension.
+    lazy : bool, optional
+        If the initial data should be imported in memmap prior to preproccessing, by default False.
+        This can be useful is cropping or sparsification is intended.
+    verbose : bool, optional
+        Knowledge==Power!, by default False
+
+    Returns
+    -------
+    object
+        If the data is larger than two-dimensions a DataCube is returned.
+        If the data is two-dimensional a DiffractionSLice is retruned.
+    """
+    from py4DSTEM.data import DiffractionSlice, RealSlice
+    from py4DSTEM.datacube import DataCube
+
+    def add_dataset_wAttrs(add_to, name:str, data, attributes:dict):
+        set = add_to.create_dataset(name, data=data)
+        for k,v in attributes.items():
+            set.attrs.create(k, v)
+        return set
+    def add_group_wAttrs(add_to, name:str, attributes:dict):
+        grp = add_to.create_group(name)
+        for k,v in attributes.items():
+            grp.attrs.create(k, v)
+        return grp
+
+    # Read metadata and data
+    meta = swift_json_reader(file_path, signal_type='diffraction')
+    _, data = collect_swift_file(file_path)
+    if not kwargs.get('lazy'): data = data.copy() #TODO: don't copy out of memmap before crop or sparse
+
+    if meta.flip_x and verbose:
+        print('Detector flip_x flagged True. Reversing the qx axis.')
+    else:
+        if verbose: print('Detector flip_x flagged False. Not reversing the qx axis.')
+        data = data[...,::-1]
+
+    if kwargs.get('lazy'): data = data.copy() # Data up to now is memmap if lazy, which is not supported by py4DSTEM.
+        
+    # Determine the py4DSTEM class type
+    if meta.is_series: raise('Reading of series are not currently implimented. The data must be a four-dimenstional 4D-STEM scan.')
+    assert len(data.shape) in (2, 4)
+    if len(data.shape) == 4:
+        f = DataCube(data=data)
+    else:
+        if meta.axes[0]['units'] == 'nm':
+            f = RealSlice(data=data)
+        else:
+            f = DiffractionSlice(data=data)
+
+    # Set the calibrations
+    axes = {ax['name']: ax for ax in meta.axes}
+    for k,v in axes.items():
+        if verbose: print(f'Storing {k} axis', v)
+        if v['units'] == 'px': v['units'] = 'pixels'
+        if k == 'x':
+            f.calibration.set_R_pixel_size(v['scale'])
+            f.calibration.set_R_pixel_units(v['units'])
+        elif k == 'y':
+            if v['scale'] != axes['x']['scale']:
+                print("Warning: py4DSTEM currently only handles uniform x,y sampling. Setting sampling with x calibration")
+        elif k == 'qx':
+            f.calibration.set_Q_pixel_size(v['scale'])
+            f.calibration.set_Q_pixel_units(v['units'])
+            f.calibration.set_qx0_mean(-v['offset'])
+        elif k == 'qy':
+            f.calibration.set_qy0_mean(-v['offset'])
+            if v['scale'] != axes['qx']['scale']:
+                print("Warning: py4DSTEM currently only handles uniform qx,qy sampling. Setting sampling with qx calibration")
+        else:
+            print(f'Axes {k} is not supported and will be ignored.')
+    if meta.is_scan:
+        f.calibration.set_QR_rotation_degrees(meta.scan_rotation)
+    
+    return f
