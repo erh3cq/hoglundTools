@@ -392,11 +392,12 @@ def load_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **kwar
     _, data = collect_swift_file(file_path)
     if not kwargs.get('lazy'): data = data.copy() #TODO: don't copy out of memmap before crop or sparse
 
-    if meta.flip_x and verbose:
-        print('Detector flip_x flagged True. Reversing the qx axis.')
+    if meta.flip_x:
+        if verbose: 
+            print('Detector flip_x flagged True. Reversing the qx axis.')
+        data = data[...,::-1]
     else:
         if verbose: print('Detector flip_x flagged False. Not reversing the qx axis.')
-        data = data[...,::-1]
 
     if kwargs.get('lazy'): data = data.copy() # Data up to now is memmap if lazy, which is not supported by py4DSTEM.
         
