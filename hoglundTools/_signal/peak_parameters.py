@@ -8,7 +8,7 @@ import numpy as np
 
 from hoglundTools._hyperspy import is_HyperSpy_signal
 
-def _estimate_FWPM(data, E, percent=0.5, verbose=None):
+def _estimate_FWPM(data, E, percent=0.5, verbose=None, return_bnds=False):
     '''
     Estimate the full width of a peak at a percent of its height.
 
@@ -38,8 +38,10 @@ def _estimate_FWPM(data, E, percent=0.5, verbose=None):
     l = E[:E_max_i][l]
     r = np.nanargmin(data[E_max_i:])
     r = E[E_max_i:][r]
-
-    return r-l
+    if return_bnds:
+        return r-l, l, r
+    else:
+        return r-l
     
 def _estimate_LSPM(data, E, percent=0.5, E_max_i=None, verbose=None):
     '''
@@ -62,7 +64,7 @@ def _estimate_LSPM(data, E, percent=0.5, E_max_i=None, verbose=None):
     l = np.nanargmin(data[:E_max_i])
     l = E[:E_max_i][l]
 
-def estimate_FWPM(data, percent=0.5, E=None, verbose=None, hs_kwargs={'inplace':False}):
+def estimate_FWPM(data, percent=0.5, E=None, verbose=None, hs_kwargs={'inplace':False}, return_bnds=False):
     '''
     Estimate the full width of a peak at a percent of its height.
 
@@ -85,7 +87,8 @@ def estimate_FWPM(data, percent=0.5, E=None, verbose=None, hs_kwargs={'inplace':
 
     if is_HyperSpy_signal(data):
         if verbose in ['all']: print('Running as HS sig')
-        fwpm = data.map(_estimate_FWPM, E=data.axes_manager[-1].axis, percent=percent, verbose=verbose, **hs_kwargs)
+        fwpm = data.map(_estimate_FWPM, E=data.axes_manager[-1].axis, percent=percent, return_bnds=return_bnds, verbose=verbose, **hs_kwargs)
+            
     else:
         if E is None:
             if verbose in ['all']: print('E is None. The returned values will be in relative indicies.')
@@ -93,7 +96,8 @@ def estimate_FWPM(data, percent=0.5, E=None, verbose=None, hs_kwargs={'inplace':
 
         shape = np.shape(data)
         data = data.reshape(-1, shape[-1])
-        fwpm = np.asarray([_estimate_FWPM(d, E=E, percent=percent, verbose=verbose) for d in data], dtype=float).reshape(shape[:2])
+        if return_bnds: shape = shape[:-1] + tuple([3])
+        fwpm = np.asarray([_estimate_FWPM(d, E=E, percent=percent, return_bnds=return_bnds, verbose=verbose) for d in data], dtype=float).reshape(shape)
         
     return fwpm
     
