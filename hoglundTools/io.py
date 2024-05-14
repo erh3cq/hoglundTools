@@ -75,13 +75,15 @@ class swift_json_reader:
 
         #General metadata
         self.title = self.meta.get('title')
-        self.signal_type = signal_type if signal_type is not None else self.read_signal_type()
 
         #Axis handling
         self.is_series = True if self.meta.get('is_sequence') is not None else False
         self.is_scan = True if self.meta['metadata'].get('scan') is not None else False
+        self.is_preprocessed = len(self.meta['metadata']) + len(self.meta['properties']) == 0
         self.nav_dim = self.meta['collection_dimension_count']
         self.sig_dim = self.meta['datum_dimension_count']
+        self.signal_type = signal_type if signal_type is not None else self.read_signal_type()
+
 
         self.axes = self.read_axes_calibrations()
         if get_npy_shape:
@@ -89,26 +91,48 @@ class swift_json_reader:
         if self.is_series and self.axes[0]['units']=='': self.axes[0]['units'] = 'frame'
         self.infer_axes_names()
 
-        #Instrument metadata
-        self.beam_energy = self.meta['metadata']['instrument'].get('high_tension')/1E3
-        self.aberrations = self.read_abberations()
+        if not self.is_preprocessed:
+            #Instrument metadata
+            self.beam_energy = self.meta['metadata']['instrument'].get('high_tension')/1E3
+            self.aberrations = self.read_abberations()
 
-        #Scan metadata
-        if self.is_scan:
-            self.scan_rotation = self.meta['metadata']['scan'].get('rotation_deg')
-            self.dwell_time = self.meta['metadata']['scan']['scan_device_parameters'].get('pixel_time_us') * 1E-6
-        
-        #Detector metadata
-        self.exposure = self.meta['metadata']['hardware_source'].get('exposure')
-        self.binning = self.meta['properties'].get('binning')
-        self.flip_x = self.meta['properties'].get('is_flipped_horizontally') or \
-            self.meta.get('camera_processing_parameters').get('flip_l_r') if self.meta.get('camera_processing_parameters') is not None else None
+            #Scan metadata
+            if self.is_scan:
+                self.scan_rotation = self.meta['metadata']['scan'].get('rotation_deg')
+                self.dwell_time = self.meta['metadata']['scan']['scan_device_parameters'].get('pixel_time_us') * 1E-6
+            
+            #Detector metadata
+            self.exposure = self.meta['metadata']['hardware_source'].get('exposure')
+            self.binning = self.meta['properties'].get('binning')
+            self.flip_x = self.meta['properties'].get('is_flipped_horizontally') or \
+                self.meta.get('camera_processing_parameters').get('flip_l_r') if self.meta.get('camera_processing_parameters') is not None else None
         
 
     def read_signal_type(self):
-        signal_type = self.meta['properties'].get('signal_type') or \
-            self.meta['metadata']['hardware_source'].get('signal_type')
-        if signal_type == 'eels': signal_type = 'EELS'
+        #signal_type = self.meta['properties'].get('signal_type') or \
+        #    self.meta['metadata']['hardware_source'].get('signal_type') if self.meta.get('hardware_source')is not None else None
+        #if signal_type == 'eels': signal_type = 'EELS'
+
+        #if signal_type is None:
+        if self.sig_dim == 1:
+            sig_unit = self.meta['spatial_calibrations'][-1]
+            if sig_unit[-1] == 'eV':
+                signal_type = 'EELS'
+        if self.sig_dim == 2:
+            sig_unit = np.asanyarray([ax['units'] for ax in self.meta['spatial_calibrations'][-2:]])
+            if np.all(sig_unit == 'nm'):
+                signal_type = 'Image'
+            elif np.all(sig_unit == 'mrad'):
+                signal_type = 'diffraction'
+            elif sig_unit[-1] == 'eV':
+                if np.diff(self.data_shape[-2:])==0:
+                    signal_type = 'diffraction'
+                else:
+                    signal_type = '2D-EELS'
+                
+
+
+
         return signal_type
 
     def read_axes_calibrations(self):
@@ -180,6 +204,8 @@ def swift_meta_to_hs_dict(swift_metadata:object, signal_type:str=None) -> dict:
     meta_dict = {}
     meta_dict['General'] = dict(title=swift_metadata.title)
     meta_dict['Signal'] = dict(signal_type=swift_metadata.signal_type)
+    if swift_metadata.is_preprocessed: return meta_dict
+    
     meta_dict['Acquisition_instrument'] = {'TEM':{
         'beam_energy': swift_metadata.beam_energy,
         'Aberrations': swift_metadata.aberrations,
@@ -278,7 +304,7 @@ def load_swift_to_hdf5(file_path:str, signal_type:str=None, lazy:bool=False, **k
     return f
 
 
-
+#TODO: flip_x is bakwards.
 def convert_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **kwargs) -> object:
     def add_dataset_wAttrs(add_to, name:str, data, attributes:dict):
         set = add_to.create_dataset(name, data=data)
@@ -353,7 +379,6 @@ def convert_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **k
     print('Created.')
     f.close()
 
-#TODO: Start changin over to a read function instead of convert
 def load_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **kwargs) -> object:
     """Read swift ndata1 or npy+json file into the py4DSTEM format.
 
