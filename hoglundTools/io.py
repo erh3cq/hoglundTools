@@ -4,6 +4,7 @@ import json
 import sys
 import os
 from glob import glob
+from warnings import warn
 
 import numpy as np
 from numpy.typing import NDArray
@@ -66,12 +67,13 @@ def collect_swift_file(file_path:str):
 
 class swift_json_reader:
     
-    def __init__(self, file_path:str, signal_type:str=None, get_npy_shape:bool=True, **kwargs):
+    def __init__(self, file_path:str, signal_type:str=None, get_npy_shape:bool=True, verbose=False):
         #File handling
         self.file_path = file_path
         self.file_directory, self.file_name, self.file_extension = parse_file_path(file_path)
         self.meta, data = collect_swift_file(self.file_path)
         self.data_shape = data.shape
+        self.detector = self.meta['metadata']['hardware_source'].get('source')
 
         #General metadata
         self.title = self.meta.get('title')
@@ -83,13 +85,16 @@ class swift_json_reader:
         self.nav_dim = self.meta['collection_dimension_count']
         self.sig_dim = self.meta['datum_dimension_count']
         self.signal_type = signal_type if signal_type is not None else self.read_signal_type()
-
+        if verbose: print(f'Read signal type: {self.signal_type}')
 
         self.axes = self.read_axes_calibrations()
+        if verbose: print(f'Read axes: {self.axes}')
         if get_npy_shape:
             for ax, d in zip(self.axes, self.data_shape): ax['size'] = d
         if self.is_series and self.axes[0]['units']=='': self.axes[0]['units'] = 'frame'
-        self.infer_axes_names()
+        
+        self.infer_axes_names(verbose=verbose)
+        if verbose: print(f'Built axes: {self.axes}')
 
         if not self.is_preprocessed:
             #Instrument metadata
@@ -103,6 +108,7 @@ class swift_json_reader:
             
             #Detector metadata
             self.exposure = self.meta['metadata']['hardware_source'].get('exposure')
+            self.readout_area = self.meta['metadata']['hardware_source'].get('interpolated_area_tlbr')
             self.binning = self.meta['properties'].get('binning')
             self.flip_x = self.meta['properties'].get('is_flipped_horizontally') or \
                 self.meta.get('camera_processing_parameters').get('flip_l_r') if self.meta.get('camera_processing_parameters') is not None else None
@@ -122,32 +128,30 @@ class swift_json_reader:
             sig_unit = np.asanyarray([ax['units'] for ax in self.meta['spatial_calibrations'][-2:]])
             if np.all(sig_unit == 'nm'):
                 signal_type = 'Image'
-            elif np.all(sig_unit == 'mrad'):
+            elif np.all(['rad' in u for u in sig_unit]):
                 signal_type = 'diffraction'
             elif sig_unit[-1] == 'eV':
                 if np.diff(self.data_shape[-2:])==0:
                     signal_type = 'diffraction'
                 else:
                     signal_type = '2D-EELS'
-                
-
-
-
         return signal_type
 
     def read_axes_calibrations(self):
         axes = [ax.copy() for ax in self.meta['spatial_calibrations']]
         return axes
     
-    def infer_axes_names(self):
+    def infer_axes_names(self, verbose=False):
         if self.is_series: self.axes[0]['name'] = 'time'
         self.axes_rspace_dims = [i for i, ax in enumerate(self.axes) if ax['units'] in ('um','nm','A','pm')]
         for i,n in zip(self.axes_rspace_dims[::-1], 'xyz'): self.axes[i]['name'] = n #may need to reverse
-        if self.signal_type == 'EELS':
-            if self.meta['datum_dimension_count'] == 2:
-                self.axes_qspace_dims = [-2]
-                self.axes[-2]['name'] = 'q'
-                self.axes[-2]['units'] = 'px'
+        if self.signal_type == 'EELS':                
+            self.axes_sspace_dims = [-1]
+            self.axes[-1]['name'] = 'E'
+        elif self.signal_type == '2D-EELS':
+            self.axes_qspace_dims = [-2]
+            self.axes[-2]['name'] = 'q'
+            self.axes[-2]['units'] = 'px'
             self.axes_sspace_dims = [-1]
             self.axes[-1]['name'] = 'E'
         elif self.signal_type == 'diffraction':
@@ -155,9 +159,10 @@ class swift_json_reader:
             self.axes[-1]['name'] = 'qy'
             self.axes_qspace_dims = [-2, -1]
             for i in self.axes_qspace_dims:
-                self.axes[i]['scale'] = 1
-                self.axes[i]['offset'] = -self.data_shape[i]/2
-                self.axes[i]['units'] = 'px'
+                if self.detector != 'Ronchigram':
+                    self.axes[i]['scale'] = 1
+                    self.axes[i]['units'] = 'px'
+                self.axes[i]['offset'] = -self.data_shape[i]/2 * self.axes[i]['scale']
 
     def read_abberations(self):
         if self.meta['metadata']['instrument'].get('ImageScanned') is None:
@@ -223,7 +228,7 @@ def swift_meta_to_hs_dict(swift_metadata:object, signal_type:str=None) -> dict:
 
     return meta_dict
 
-def load_swift_to_hs(file_path:str, signal_type:str=None, lazy:bool=False, **kwargs) -> object:
+def load_swift_to_hs(file_path:str, signal_type:str=None, lazy:bool=False, verbose=False, **kwargs) -> object:
     """load_swift_to_hs _summary_
 
     Parameters
@@ -244,8 +249,9 @@ def load_swift_to_hs(file_path:str, signal_type:str=None, lazy:bool=False, **kwa
     """
     from hyperspy.signals import BaseSignal, Signal1D, Signal2D
 
-    meta = swift_json_reader(file_path, signal_type=signal_type)
+    meta = swift_json_reader(file_path, signal_type=signal_type, verbose=verbose)
     _, data = collect_swift_file(file_path)
+    if meta.flip_x and np.logical_or(meta.signal_type=='diffraction', signal_type=='diffraction'): data[...,::-1]
 
     #mmap = 'c' if kwargs.get('lazy') else None
     #data = np.load(file_path+'.npy', mmap_mode=mmap)
@@ -268,7 +274,7 @@ def load_swift_to_hs(file_path:str, signal_type:str=None, lazy:bool=False, **kwa
     if lazy:
         sig = sig.as_lazy()
         
-    if signal_type == 'diffraction':
+    if meta.signal_type == 'diffraction' or signal_type == 'diffraction':
         sig.set_signal_type('electron_diffraction')
     elif meta.signal_type == 'EELS' or signal_type == 'EELS':
         sig.set_signal_type('EELS')
@@ -306,6 +312,7 @@ def load_swift_to_hdf5(file_path:str, signal_type:str=None, lazy:bool=False, **k
 
 #TODO: flip_x is bakwards.
 def convert_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **kwargs) -> object:
+    warn('Convert_swift_to_py4DSTEM is depreciated. Use load_swift_to_py4DSTEM.', DeprecationWarning)
     def add_dataset_wAttrs(add_to, name:str, data, attributes:dict):
         set = add_to.create_dataset(name, data=data)
         for k,v in attributes.items():
