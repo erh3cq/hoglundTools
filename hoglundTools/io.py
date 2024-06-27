@@ -7,8 +7,10 @@ from glob import glob
 from warnings import warn
 
 import numpy as np
-from numpy.typing import NDArray
 import dask.array as da
+
+from typing import List
+from numpy.typing import NDArray
 
 import h5py
 import json
@@ -411,7 +413,9 @@ def convert_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **k
     print('Created.')
     f.close()
 
-def load_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **kwargs) -> object:
+def load_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, 
+                           crop_r:List[int]=None, skip_r:int=None,
+                           **kwargs) -> object:
     """Read swift ndata1 or npy+json file into the py4DSTEM format.
 
     Parameters
@@ -447,6 +451,13 @@ def load_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **kwar
     # Read metadata and data
     meta = swift_json_reader(file_path, signal_type='diffraction', verbose=verbose)
     _, data = collect_swift_file(file_path)
+    if crop_r is not None:
+        assert len(crop_r)==meta.nav_dim
+        for ax in crop_r: assert len(ax)==2
+        data = data[crop_r[0][0]:crop_r[0][1], crop_r[1][0]:crop_r[1][1]]
+    if skip_r is not None:
+        data = data[::skip_r, ::skip_r]
+
     if not kwargs.get('lazy'): data = data.copy() #TODO: don't copy out of memmap before crop or sparse
 
     if meta.flip_x:
@@ -476,7 +487,11 @@ def load_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **kwar
         if verbose: print(f'Storing {k} axis', v)
         if v['units'] == 'px': v['units'] = 'pixels'
         if k == 'x':
-            f.calibration.set_R_pixel_size(v['scale'])
+            if skip_r is None:
+                xscale = v['scale']
+            else:
+                xscale = v['scale'] * skip_r
+            f.calibration.set_R_pixel_size(xscale)
             f.calibration.set_R_pixel_units(v['units'])
         elif k == 'y':
             if v['scale'] != axes['x']['scale']:
