@@ -161,7 +161,7 @@ def legend_2axis(axes, labels='auto', display_axis=0, **kwargs):
 
 class   plot_image(object):
     def __init__(self, data, ax=None, norm=None, fix_nv=None,
-                 ticks_and_labels='off', scale_bar=False,
+                 ticks_and_labels='off', scale_bar=True,
                  fix_nv_kwargs=None, scale_bar_kwargs=None , **kwargs):
         """
          A shortcut plotting function for imshow that automatically handles things like imshow kwargs and intenisty bounds.
@@ -178,11 +178,12 @@ class   plot_image(object):
         fix_nv: boolean
             Correct for negative vlaues.
         ticks_and_labels: Str
-            What to do with the axes.
-            off: turn off the axes (default).
-            empty: turn the ticks and labels off but leave the lines.
+            What to do with the axes ticks and borders.
+            off:    turn off the axes (default).
+            empty:  turn the ticks and labels off but leave the borders.
+            on:     keep the ticks and borders in on.
         add_scale_bar: boolean
-            Add a scalebar object to the image if True. Default if False.
+            Add a scalebar object to the image if True. Default if True.
             For brevity, if scale_bar_kwargs is populated then scal_bar is set to True.
         
         fig_nv_kwargs: dict
@@ -209,7 +210,7 @@ class   plot_image(object):
         if fix_nv is not None:
             data = nv_correction(data, **fix_nv_kwargs)
 
-        self.img = ax.imshow(data, norm=self.norm, **kwargs) #TODO: make updatable with show function that is then called in __init__
+        self.img = self.ax.imshow(data, norm=self.norm, **kwargs) #TODO: make updatable with show function that is then called in __init__
 
         #TODO: add scale_bar        
         scale_bar = True if scale_bar or scale_bar_kwargs is not None else False
