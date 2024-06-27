@@ -212,7 +212,7 @@ class   plot_image(object):
 
         self.img = self.ax.imshow(data, norm=self.norm, **kwargs) #TODO: make updatable with show function that is then called in __init__
 
-        #TODO: add scale_bar        
+        # Add scale_bar        
         scale_bar = True if scale_bar or scale_bar_kwargs is not None else False
         if scale_bar_kwargs is None: scale_bar_kwargs = {}
         if scale_bar:
@@ -228,6 +228,8 @@ class   plot_image(object):
         elif state == 'empty':
             self.ax.set_yticks([])
             self.ax.set_xticks([])
+        elif state == 'on':
+            pass
 
 def save_fig(file_name, fig=None, file_types=['svg','png'], **kwargs):
     if fig is None: fig = plt.gcf()
