@@ -15,7 +15,32 @@ import json
 #from tqdm import tqdm
 import zipfile
 
+def h5_tree(file:str, pre:str='') -> None:
+    """Print an h5 file tree
 
+    Parameters
+    ----------
+    file : str
+        File path
+    pre : str, optional
+        Entry to each line, by default ''
+    """
+    items = len(file)
+    for key, file in file.items():
+        items -= 1
+        if items == 0:
+            # the last item
+            if type(file) == h5py._hl.group.Group:
+                print(pre + '└── ' + key)
+                h5_tree(file, pre+'    ')
+            else:
+                print(pre + '└── ' + key)
+        else:
+            if type(file) == h5py._hl.group.Group:
+                print(pre + '├── ' + key)
+                h5_tree(file, pre+'│   ')
+            else:
+                print(pre + '├── ' + key)
 
 def load_memmap_from_npz(path, name):
     '''
@@ -121,9 +146,9 @@ class swift_json_reader:
 
         #if signal_type is None:
         if self.sig_dim == 1:
-            sig_unit = self.meta['spatial_calibrations'][-1]
-            if sig_unit[-1] == 'eV':
-                signal_type = 'EELS'
+            #sig_unit = self.meta['spatial_calibrations'][-1]
+            #if sig_unit[-1] == 'eV':
+            signal_type = 'EELS'
         if self.sig_dim == 2:
             sig_unit = np.asanyarray([ax['units'] for ax in self.meta['spatial_calibrations'][-2:]])
             if np.all(sig_unit == 'nm'):
@@ -155,8 +180,8 @@ class swift_json_reader:
             self.axes_sspace_dims = [-1]
             self.axes[-1]['name'] = 'E'
         elif self.signal_type == 'diffraction':
-            self.axes[-2]['name'] = 'qx'
-            self.axes[-1]['name'] = 'qy'
+            self.axes[-2]['name'] = 'qy'
+            self.axes[-1]['name'] = 'qx'
             self.axes_qspace_dims = [-2, -1]
             for i in self.axes_qspace_dims:
                 if self.detector != 'Ronchigram':
@@ -444,8 +469,10 @@ def load_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **kwar
         else:
             f = DiffractionSlice(data=data)
 
-    # Set the calibrations
+    # Set the calibrations.
+    # Note that axes are reordered because Py4DSTEM does not like Qy offset being set beofre Qx.
     axes = {ax['name']: ax for ax in meta.axes}
+    axes = {i:axes[i] for i, k in zip(['x','y','qx','qy'], axes.keys()) if i in list(axes.keys())}
     for k,v in axes.items():
         if verbose: print(f'Storing {k} axis', v)
         if v['units'] == 'px': v['units'] = 'pixels'
