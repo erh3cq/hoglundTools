@@ -421,7 +421,7 @@ def load_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **kwar
     lazy : bool, optional
         If the initial data should be imported in memmap prior to preproccessing, by default False.
         This can be useful is cropping or sparsification is intended.
-    verbose : bool, optional
+    verbose : bool or str, optional
         Knowledge==Power!, by default False
 
     Returns
@@ -445,13 +445,12 @@ def load_swift_to_py4DSTEM(file_path:str, lazy:bool=False, verbose=False, **kwar
         return grp
 
     # Read metadata and data
-    meta = swift_json_reader(file_path, signal_type='diffraction')
+    meta = swift_json_reader(file_path, signal_type='diffraction', verbose=verbose)
     _, data = collect_swift_file(file_path)
     if not kwargs.get('lazy'): data = data.copy() #TODO: don't copy out of memmap before crop or sparse
 
     if meta.flip_x:
-        if verbose: 
-            print('Detector flip_x flagged True. Reversing the qx axis.')
+        if verbose: print('Detector flip_x flagged True. Reversing the qx axis.')
         data = data[...,::-1]
     else:
         if verbose: print('Detector flip_x flagged False. Not reversing the qx axis.')
