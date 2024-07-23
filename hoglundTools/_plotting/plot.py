@@ -114,50 +114,6 @@ class add_scale_bar(AnchoredSizeBar):
         else:
             return f'{round(self.size, 1):.1f} ' + self.units
 
-    
-
-def pannel_title(axs, pos=[-.2, 1], end='', title=False, **kwargs):
-    '''
-    Adds an alphabetical label to the figure pannels.
-    '''
-    alpha = 'abcdefghijklmnopqrstuvwxyz'
-
-    for i, ax in enumerate(axs.flatten()):
-        label = alpha[i]+end
-        if title:
-            if 'loc' not in kwargs.keys():
-                kwargs['loc'] = 'left'
-            ax.set_title(label, **kwargs)
-        else:
-            ax.text(pos[0], pos[1], label, transform=ax.transAxes,
-                    fontweight='bold', va='top', ha='right', **kwargs)
-
-def legend_2axis(axes, labels='auto', display_axis=0, **kwargs):
-    '''
-    Plot a legend for a multi-axis subplot.
-    
-    Parameters
-    ----------
-    axes : tuple or list
-        List of axes containing labels for the legend.
-    labels : bool
-        If True, the ionization edges with an onset below the lower
-        energy limit of the SI will be included.
-    kwargs: dict
-        kwargs for the matplotlib legend function.
-    '''
-    lines = []
-    labels = []
-    for ax in axes:
-        li, la = ax.get_legend_handles_labels()
-        lines += li
-        labels += la
-    
-    if labels == 'auto':
-        axes[0].legend(lines,  labels, **kwargs)
-    elif labels is not None:
-        axes[0].legend(lines,  labels, **kwargs)
-
 
 class   plot_image(object):
     def __init__(self, data, ax=None, norm=None, fix_nv=None,
@@ -235,3 +191,46 @@ def save_fig(file_name, fig=None, file_types=['svg','png'], **kwargs):
     if fig is None: fig = plt.gcf()
     for ft in file_types:
         fig.savefig(file_name+'.'+ft, **kwargs)
+
+
+def pannel_title(axs, pos=[-.2, 1], end='', title=False, **kwargs):
+    '''
+    Adds an alphabetical label to the figure pannels.
+    '''
+    alpha = 'abcdefghijklmnopqrstuvwxyz'
+
+    for i, ax in enumerate(axs.flatten()):
+        label = alpha[i]+end
+        if title:
+            if 'loc' not in kwargs.keys():
+                kwargs['loc'] = 'left'
+            ax.set_title(label, **kwargs)
+        else:
+            ax.text(pos[0], pos[1], label, transform=ax.transAxes,
+                    fontweight='bold', va='top', ha='right', **kwargs)
+
+def legend_2axis(axes, labels='auto', display_axis=0, **kwargs):
+    '''
+    Plot a legend for a multi-axis subplot.
+    
+    Parameters
+    ----------
+    axes : tuple or list
+        List of axes containing labels for the legend.
+    labels : bool
+        If True, the ionization edges with an onset below the lower
+        energy limit of the SI will be included.
+    kwargs: dict
+        kwargs for the matplotlib legend function.
+    '''
+    lines = []
+    labels = []
+    for ax in axes:
+        li, la = ax.get_legend_handles_labels()
+        lines += li
+        labels += la
+    
+    if labels == 'auto':
+        axes[0].legend(lines,  labels, **kwargs)
+    elif labels is not None:
+        axes[0].legend(lines,  labels, **kwargs)
