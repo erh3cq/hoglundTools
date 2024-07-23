@@ -39,6 +39,8 @@ def is_HyperSpy_signal(signal, signal_type=None):
     
     if signal_type is None:
         return is_signal
+    elif signal_type == 'Signal2D':
+        return isinstance(signal, Signal2D)
     else:
          return signal.__class__.__name__ == signal_type or signal.__class__.__base__.__name__ == signal_type
          
