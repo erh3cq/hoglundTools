@@ -89,27 +89,31 @@ def collect_swift_file(file_path:str):
         opened=h5py.File(file_path+'.h5')
         data=np.asarray(opened['data'])
         meta=maph5meta( json.loads(opened['data'].attrs['properties']) )
+    elif file_extension == '.ndata':
+        opened=np.load(file_path+'.ndata')
+        data=opened["data"]
+        meta=maph5meta( json.loads(opened["metadata.json"].decode()) )
     else:
         raise Exception(f'The Swift files could not be collected.\nA file extension should with `.npy` or `.ndata1` were not found or provided.\n{file_path}')
     printNestedDict(meta)
     return meta, data
 
 def printNestedDict(dict1,path=""):
-        if isinstance(dict1,dict):
-                keys=dict1.keys()
+    if isinstance(dict1,dict):
+        keys=dict1.keys()
+    else:
+        keys=np.arange(len(dict1))
+    for k in keys:
+        if isinstance(dict1[k],(dict,list)):
+            printNestedDict(dict1[k],path=path+" > "+str(k))
         else:
-                keys=np.arange(len(dict1))
-        for k in keys:
-                if isinstance(dict1[k],(dict,list)):
-                        printNestedDict(dict1[k],path=path+" > "+str(k))
-                else:
-                        print(path+" > "+str(k)+" > ",dict1[k])
+            print(path+" > "+str(k)+" > ",dict1[k])
 def maph5meta(meta):
-        new=meta
-        new['metadata']['hardware_source']['source']=meta['metadata']['hardware_source']['hardware_source_name']
-        new['properties']={}
-        new['spatial_calibrations']=meta['dimensional_calibrations']
-        return new
+    new=meta
+    new['metadata']['hardware_source']['source']=meta['metadata']['hardware_source']['hardware_source_name']
+    new['properties']={}
+    new['spatial_calibrations']=meta['dimensional_calibrations']
+    return new
 
 class swift_json_reader:
     
