@@ -95,7 +95,7 @@ def collect_swift_file(file_path:str):
         meta=maph5meta( json.loads(opened["metadata.json"].decode()) )
     else:
         raise Exception(f'The Swift files could not be collected.\nA file extension should with `.npy` or `.ndata1` were not found or provided.\n{file_path}')
-    printNestedDict(meta)
+    #printNestedDict(meta)
     return meta, data
 
 def printNestedDict(dict1,path=""):
