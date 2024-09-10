@@ -85,12 +85,31 @@ def collect_swift_file(file_path:str):
         file = np.load(file_path+'.ndata1', mmap_mode='r')
         meta = json.loads(file['metadata.json'].decode())
         data = load_memmap_from_npz(file_path+'.ndata1', 'data')
+    elif file_extension == '.h5':
+        opened=h5py.File(file_path+'.h5')
+        data=np.asarray(opened['data'])
+        meta=maph5meta( json.loads(opened['data'].attrs['properties']) )
     else:
         raise Exception(f'The Swift files could not be collected.\nA file extension should with `.npy` or `.ndata1` were not found or provided.\n{file_path}')
-    
+    printNestedDict(meta)
     return meta, data
 
-
+def printNestedDict(dict1,path=""):
+        if isinstance(dict1,dict):
+                keys=dict1.keys()
+        else:
+                keys=np.arange(len(dict1))
+        for k in keys:
+                if isinstance(dict1[k],(dict,list)):
+                        printNestedDict(dict1[k],path=path+" > "+str(k))
+                else:
+                        print(path+" > "+str(k)+" > ",dict1[k])
+def maph5meta(meta):
+        new=meta
+        new['metadata']['hardware_source']['source']=meta['metadata']['hardware_source']['hardware_source_name']
+        new['properties']={}
+        new['spatial_calibrations']=meta['dimensional_calibrations']
+        return new
 
 class swift_json_reader:
     
@@ -108,7 +127,7 @@ class swift_json_reader:
         #Axis handling
         self.is_series = True if self.meta.get('is_sequence') is not None else False
         self.is_scan = True if self.meta['metadata'].get('scan') is not None else False
-        self.is_preprocessed = len(self.meta['metadata']) + len(self.meta['properties']) == 0
+        self.is_preprocessed = len(self.meta.get('metadata')) + len(self.meta.get('properties')) == 0
         self.nav_dim = self.meta['collection_dimension_count']
         self.sig_dim = self.meta['datum_dimension_count']
         self.signal_type = signal_type if signal_type is not None else self.read_signal_type()
