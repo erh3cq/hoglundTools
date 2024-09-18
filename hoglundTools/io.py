@@ -134,11 +134,15 @@ class swift_json_reader:
                 self.dwell_time = self.meta['metadata']['scan']['scan_device_parameters'].get('pixel_time_us') * 1E-6
             
             #Detector metadata
+            self.name = self.meta['metadata']['hardware_source'].get('hardware_source_name')
             self.exposure = self.meta['metadata']['hardware_source'].get('exposure')
-            self.readout_area = self.meta['metadata']['hardware_source'].get('interpolated_area_tlbr')
+            print(self.meta['metadata']['hardware_source'].get('sensor_readout_area_tlbr'))
+            self.readout_area = \
+                self.meta['metadata']['hardware_source']['camera_processing_parameters'].get('readout_area') if self.meta['metadata']['hardware_source'].get('camera_processing_parameters') is not None \
+                else self.meta['metadata']['hardware_source'].get('sensor_readout_area_tlbr')
             self.binning = self.meta['properties'].get('binning')
-            self.flip_x = self.meta['properties'].get('is_flipped_horizontally') or \
-                self.meta.get('camera_processing_parameters').get('flip_l_r') if self.meta.get('camera_processing_parameters') is not None else None
+            self.flip_x = self.meta.get('camera_processing_parameters').get('flip_l_r') if self.meta.get('camera_processing_parameters') is not None \
+                else self.meta['properties'].get('is_flipped_horizontally')
         
 
     def read_signal_type(self):
