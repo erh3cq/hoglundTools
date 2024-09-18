@@ -116,9 +116,11 @@ class add_scale_bar(AnchoredSizeBar):
 
 
 class   plot_image(object):
-    def __init__(self, data, ax=None, norm=None, fix_nv=None,
-                 ticks_and_labels='off', scale_bar=True,
-                 fix_nv_kwargs=None, scale_bar_kwargs=None , **kwargs):
+    def __init__(self, data, ax=None, norm=None,
+                 ticks_and_labels='off', axes_info=None,
+                 scale_bar=True, scale_bar_kwargs=None,
+                 fix_nv=None, fix_nv_kwargs=None, 
+                 **kwargs):
         """
          A shortcut plotting function for imshow that automatically handles things like imshow kwargs and intenisty bounds.
             
@@ -131,52 +133,78 @@ class   plot_image(object):
             Axis to plot to. If None then an axis is both created and returned.
         norm: matplotlib normalization
             Normalization to be used. Default is None.
-        fix_nv: boolean
-            Correct for negative vlaues.
+            This will overide any kwargs['norm'] provided and is implemented as an arg due to it frequent use.
         ticks_and_labels: Str
             What to do with the axes ticks and borders.
             off:    turn off the axes (default).
             empty:  turn the ticks and labels off but leave the borders.
             on:     keep the ticks and borders in on.
-        add_scale_bar: boolean
+        axes_info: list of dict
+            A list of dict where each dict contains information for the axis labeling and/or scale bar.
+            Implemented dict keys are: 'name', and 'units'
+        scale_bar: boolean
             Add a scalebar object to the image if True. Default if True.
             For brevity, if scale_bar_kwargs is populated then scal_bar is set to True.
-        
-        fig_nv_kwargs: dict
-            kwargs for nn_correction.
         scale_bar_kwargs: dict
             kwargs for scale_bar.
-            
+        fix_nv: boolean
+            Correct for negative vlaues.
+        fig_nv_kwargs: dict
+            kwargs for nn_correction.
         **kwarg:
             kwargs supplied to imshow.
+
+
+        TODO
+        ----
+        Create save/load definition that saves/loads to hdf5.
+            - It may be worth creating a keyword that allows for axis updates.
+            - May need a parent axis class if ax.plot is implemented.
+                - Allows for multiple images and/or plots.
+                - The previous update would help with this
+                - Then allow for saveing the axis class or the image class in the respective classes.
         """
         
+        self.data = data
         self.ax = ax if ax is not None else plt.gca()
-        self._hs_sig = is_HyperSpy_signal(data, signal_type='Signal2D')
-        self.norm = norm
         self.ticks_and_labels = ticks_and_labels
+        self.axes_info = axes_info
 
-        origin = 'upper' if kwargs.get('origin') is None else kwargs['origin']
-        if self._hs_sig and kwargs.get('extent') is None: kwargs['extent'] = get_hs_image_extent(data, origin=origin)
-        self.extent = kwargs.get('extent')
+        #Handle default kwargs for imshow
+        if kwargs.get('origin') is None: kwargs['origin'] = 'upper'
+        if norm is not None: kwargs['norm'] = norm
+
+        #Handle autopopulation for hyperspy signals
+        if is_HyperSpy_signal(data, signal_type='Signal2D'):
+            if kwargs.get('extent') is None: kwargs['extent'] = get_hs_image_extent(data, origin=kwargs['origin'])
+            if self.axes_info is None: self.axes_info = [dict(name=a.name, units=a.units) for a in data.axes_manager.signal_axes]
+            self.data = data.data
+        
+
+        self.imshow_kwargs = kwargs
 
 
 
-        #TODO: make dynamic
+        #TODO: Make fix_nv dynamic. Move out of __init__?
         if fix_nv is not None:
-            data = nv_correction(data, **fix_nv_kwargs)
+            self.data = nv_correction(self.data, **fix_nv_kwargs)
 
-        self.img = self.ax.imshow(data, norm=self.norm, **kwargs) #TODO: make updatable with show function that is then called in __init__
+        self.show_img()
 
-        # Add scale_bar        
+        #TODO: Have everything after `self.show_img()` in __init__ wrapped into a `self.decorate_image()` function to clean up init and updates.
+        
+        # Add scale_bar
         scale_bar = True if scale_bar or scale_bar_kwargs is not None else False
         if scale_bar_kwargs is None: scale_bar_kwargs = {}
         if scale_bar:
-            if scale_bar_kwargs.get('units') is None and self._hs_sig:
-                scale_bar_kwargs['units'] = data.axes_manager.signal_axes[0].units
+            if scale_bar_kwargs.get('units') is None and self.axes_info is not None:
+                scale_bar_kwargs['units'] = self.axes_info[0]['units']
             self.scale_bar = add_scale_bar(self.ax, **scale_bar_kwargs)
 
         if self.ticks_and_labels is not None: self.set_ticks_and_labels(ticks_and_labels)
+
+    def show_img(self):
+        self.img = self.ax.imshow(self.data, **self.imshow_kwargs)
 
     def set_ticks_and_labels(self, state):
         if state == 'off':
@@ -185,7 +213,13 @@ class   plot_image(object):
             self.ax.set_yticks([])
             self.ax.set_xticks([])
         elif state == 'on':
-            pass
+            if self.axes_info is not None:
+                for cax, dax in zip([self.ax.xaxis, self.ax.yaxis],
+                                     self.axes_info):
+                    cax.set_label_text(f'{dax['name']} ({dax['units']})')
+                pass
+            else:
+                pass
 
 def save_fig(file_name, fig=None, file_types=['svg','png'], **kwargs):
     if fig is None: fig = plt.gcf()
