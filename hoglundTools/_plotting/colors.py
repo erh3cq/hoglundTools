@@ -1,5 +1,6 @@
 from matplotlib.colors import LinearSegmentedColormap
 
+
 ##################
 # Black to color #
 ##################
