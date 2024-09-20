@@ -89,7 +89,7 @@ def collect_swift_file(file_path:str):
         opened=h5py.File(file_path+'.h5')
         data=np.asarray(opened['data'])
         meta=json.loads(opened['data'].attrs['properties'])
-        printNestedDict(meta)
+        #printNestedDict(meta)
         meta=maph5meta( meta )
     elif file_extension == '.ndata':
         opened=np.load(file_path+'.ndata')
