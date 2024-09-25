@@ -16,8 +16,8 @@ from scipy.signal import correlate, correlation_lags
 
 #TODO: check if hs is installed
 from hyperspy.signals import BaseSignal, Signal2D
-from exspy.signals import EELSSpectrum, LazyEELSSpectrum
-from hyperspy._lazy_signals import LazySignal2D
+#from exspy.signals import EELSSpectrum, LazyEELSSpectrum
+#from hyperspy._lazy_signals import LazySignal2D
 #from hoglundTools._signal import correlate_1D_in_2D
 
 def is_HyperSpy_signal(signal, signal_type=None):
