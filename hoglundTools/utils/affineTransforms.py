@@ -2,7 +2,7 @@
 Module for reconstructing phase objects from 4DSTEM datasets using iterative methods,
 namely DPC.
 """
-
+import numpy as np
 try:
     import cupy as xp
 except (ModuleNotFoundError, ImportError):
