@@ -216,7 +216,7 @@ class   plot_image(object):
             if self.axes_info is not None:
                 for cax, dax in zip([self.ax.xaxis, self.ax.yaxis],
                                      self.axes_info):
-                    cax.set_label_text(f'{dax['name']} ({dax['units']})')
+                    cax.set_label_text(f"{dax['name']} ({dax['units']})")
                 pass
             else:
                 pass
