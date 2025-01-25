@@ -93,8 +93,28 @@ def collect_swift_file(file_path:str):
 
 
 class swift_json_reader:
-    
     def __init__(self, file_path:str, signal_type:str=None, get_npy_shape:bool=True, verbose=False):
+        """_summary_
+
+        Parameters
+        ----------
+        file_path : str
+            _description_
+        signal_type : str, optional
+            _description_, by default None
+        get_npy_shape : bool, optional
+            _description_, by default True
+        verbose : bool, optional
+            _description_, by default False
+
+        ToDo
+        -----
+        TODO: Populate metadata through list or dict.
+             Have a list or dict of needed paramaters and the keys to search for.
+             Then loop through the keys and asign the found value to the paramaters.
+             This should handle the gross if else statements currently chained togehter.
+             This should also be able to handle situations where metadata is None.
+        """
         #File handling
         self.file_path = file_path
         self.file_directory, self.file_name, self.file_extension = parse_file_path(file_path)
